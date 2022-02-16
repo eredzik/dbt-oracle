@@ -4,9 +4,9 @@ version: 1.0
 profile: dbt_oracle_test
 
 quoting:
-  database: false
-  identifier: false
-  schema: false
+    database: false
+    identifier: false
+    schema: false
 
 on-run-start:
     - "select 'hook start' from dual"

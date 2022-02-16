@@ -30,32 +30,34 @@ class OracleAdapterCredentials(Credentials):
     An OracleConnectionMethod is inferred from the combination
     of parameters profiled in the profile.
     """
+
     user: str
     password: str
     # Note: The port won't be used if the host is not provided
     # Default Oracle database port
-    port: Port = 1521
+    port: Optional[int] = 1521
     host: Optional[str] = None
     service: Optional[str] = None
     connection_string: Optional[str] = None
 
-    _ALIASES = {
-        'dbname': 'database',
-        'pass': 'password'
-    }
+    _ALIASES = {"dbname": "database", "pass": "password"}
 
     @property
     def type(self):
-        return 'oracle'
+        return "oracle"
 
     def _connection_keys(self) -> Tuple[str]:
         """
         List of keys to display in the `dbt debug` output. Omit password.
         """
         return (
-            'user', 'database', 'schema',
-            'host', 'port', 'service',
-            'connection_string'
+            "user",
+            "database",
+            "schema",
+            "host",
+            "port",
+            "service",
+            "connection_string",
         )
 
     def connection_method(self) -> OracleConnectionMethod:
@@ -87,37 +89,37 @@ class OracleAdapterCredentials(Credentials):
         else:
             service = self.database
 
-        return f'{self.host}:{self.port}/{service}'
+        return f"{self.host}:{self.port}/{service}"
 
 
 class OracleAdapterConnectionManager(SQLConnectionManager):
-    TYPE = 'oracle'
+    TYPE = "oracle"
 
     @classmethod
     def open(cls, connection):
-        if connection.state == 'open':
-            logger.debug('Connection is already open, skipping open.')
+        if connection.state == "open":
+            logger.debug("Connection is already open, skipping open.")
             return connection
         credentials = cls.get_credentials(connection.credentials)
         method = credentials.connection_method()
         dsn = credentials.get_dsn()
 
-        logger.debug(f"Attempting to connect using Oracle method: '{method}' "
-                     f"and dsn: '{dsn}'")
+        logger.debug(
+            f"Attempting to connect using Oracle method: '{method}' "
+            f"and dsn: '{dsn}'"
+        )
         try:
             handle = cx_Oracle.connect(
-                credentials.user,
-                credentials.password,
-                dsn,
-                encoding="UTF-8"
+                credentials.user, credentials.password, dsn, encoding="UTF-8"
             )
             connection.handle = handle
-            connection.state = 'open'
+            connection.state = "open"
         except cx_Oracle.DatabaseError as e:
-            logger.info(f"Got an error when attempting to open an Oracle "
-                        f"connection: '{e}'")
+            logger.info(
+                f"Got an error when attempting to open an Oracle " f"connection: '{e}'"
+            )
             connection.handle = None
-            connection.state = 'fail'
+            connection.state = "fail"
 
             raise dbt.exceptions.FailedToConnectException(str(e))
 
@@ -133,7 +135,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
         try:
             Connection.close(oracle_connection)
         except Exception as e:
-            logger.error('Error closing connection for cancel request')
+            logger.error("Error closing connection for cancel request")
             raise Exception(str(e))
 
         logger.info("Canceled query '{}'".format(connection_name))
@@ -141,11 +143,11 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
     @classmethod
     def get_status(cls, cursor):
         # Do oracle cx has something for this? could not find it
-        return 'OK'
+        return "OK"
 
     @classmethod
     def get_response(cls, cursor):
-        return 'OK'
+        return "OK"
 
     @contextmanager
     def exception_handler(self, sql):
@@ -153,7 +155,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             yield
 
         except cx_Oracle.DatabaseError as e:
-            logger.info('Oracle error: {}'.format(str(e)))
+            logger.info("Oracle error: {}".format(str(e)))
 
             try:
                 # attempt to release the connection
@@ -184,23 +186,22 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
         sql: str,
         auto_begin: bool = True,
         bindings: Optional[Any] = {},
-        abridge_sql_log: bool = False
+        abridge_sql_log: bool = False,
     ) -> Tuple[Connection, Any]:
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
 
-        logger.debug('Using {} connection "{}".'
-                     .format(self.TYPE, connection.name))
+        logger.debug('Using {} connection "{}".'.format(self.TYPE, connection.name))
 
         with self.exception_handler(sql):
             if abridge_sql_log:
-                log_sql = '{}...'.format(sql[:512])
+                log_sql = "{}...".format(sql[:512])
             else:
                 log_sql = sql
 
             logger.debug(
-                'On {connection_name}: {sql}',
+                "On {connection_name}: {sql}",
                 connection_name=connection.name,
                 sql=log_sql,
             )
@@ -212,7 +213,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             logger.debug(
                 "SQL status: {status} in {elapsed:0.2f} seconds",
                 status=self.get_status(cursor),
-                elapsed=(time.time() - pre)
+                elapsed=(time.time() - pre),
             )
 
             return connection, cursor

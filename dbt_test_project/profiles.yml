@@ -1,10 +1,10 @@
-dbt_oracle_test: 
-   target: dev
-   outputs:
-      dev:
-         type: oracle
-         user: dbt_test
-         pass: dbt_test
-         dbname: xe
-         schema: dbt_test
-         threads: 4
+dbt_oracle_test:
+    target: dev
+    outputs:
+        dev:
+            type: oracle
+            user: dbt_test
+            pass: dbt_test
+            dbname: xe
+            schema: dbt_test
+            threads: 4

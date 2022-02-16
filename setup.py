@@ -11,8 +11,8 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-        'dbt-core~=0.19.0',
-        'cx_Oracle==7.3.0'
+        'dbt-core~=1.0.1',
+        'cx_Oracle==8.1.0'
 ]
 
 setup_requirements = []

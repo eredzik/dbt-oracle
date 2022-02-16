@@ -119,3 +119,6 @@ dist
 
 
 dbt_integration_test
+
+Pipfile
+Pipfile.lock
