@@ -4,4 +4,6 @@ import logging
 from dbt.logger import GLOBAL_LOGGER as logger
 
 # logger.setLevel(logging.DEBUG)
-main(["seed", "--profiles-dir", "./"])
+# main(["seed", "--profiles-dir", "./"])
+# main(["run", "--profiles-dir", "./"])
+main(["test", "--profiles-dir", "./"])

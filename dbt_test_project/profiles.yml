@@ -8,3 +8,5 @@ dbt_oracle_test:
             dbname: xe
             schema: dbt_test
             threads: 4
+            log_all_commands: True
+            cursor_precode: "select 1 as abc from dual"

@@ -6,15 +6,31 @@ import time
 
 import dbt.exceptions
 import cx_Oracle
-from cx_Oracle import Connection
+from cx_Oracle import Connection as OracleConnection
 
 from dbt.logger import GLOBAL_LOGGER as logger
 
 from dataclasses import dataclass
-from dbt.helper_types import Port
 
 from dbt.adapters.base import Credentials
 from dbt.adapters.sql import SQLConnectionManager
+from dbt.contracts.connection import Connection as DBTConnection
+from dbt.events.types import InfoLevel, Cli, File
+from dbt.events.functions import fire_event
+
+
+@dataclass
+class HookInfo(InfoLevel, Cli, File):
+    msg: str
+    code: str = "E040"
+
+    def message(self) -> str:
+        return f"{self.msg}."
+
+
+@dataclass
+class DummyResponse:
+    _message: str
 
 
 class OracleConnectionMethod(enum.Enum):
@@ -39,6 +55,8 @@ class OracleAdapterCredentials(Credentials):
     host: Optional[str] = None
     service: Optional[str] = None
     connection_string: Optional[str] = None
+    debug_log_commands: Optional[bool] = False
+    cursor_precode: Optional[str] = None
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
@@ -96,7 +114,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
     TYPE = "oracle"
 
     @classmethod
-    def open(cls, connection):
+    def open(cls, connection: DBTConnection):
         if connection.state == "open":
             logger.debug("Connection is already open, skipping open.")
             return connection
@@ -114,6 +132,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             )
             connection.handle = handle
             connection.state = "open"
+
         except cx_Oracle.DatabaseError as e:
             logger.info(
                 f"Got an error when attempting to open an Oracle " f"connection: '{e}'"
@@ -126,14 +145,14 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
         return connection
 
     @classmethod
-    def cancel(cls, connection):
+    def cancel(cls, connection: DBTConnection):
         connection_name = connection.name
         oracle_connection = connection.handle
 
         logger.info("Cancelling query '{}' ".format(connection_name))
 
         try:
-            Connection.close(oracle_connection)
+            OracleConnection.close(oracle_connection)
         except Exception as e:
             logger.error("Error closing connection for cancel request")
             raise Exception(str(e))
@@ -143,11 +162,11 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
     @classmethod
     def get_status(cls, cursor):
         # Do oracle cx has something for this? could not find it
-        return "OK"
+        return DummyResponse("OK")
 
     @classmethod
     def get_response(cls, cursor):
-        return "OK"
+        return DummyResponse("OK")
 
     @contextmanager
     def exception_handler(self, sql):
@@ -155,19 +174,19 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             yield
 
         except cx_Oracle.DatabaseError as e:
-            logger.info("Oracle error: {}".format(str(e)))
+            logger.error("Oracle error: {}".format(str(e)))
 
             try:
                 # attempt to release the connection
                 self.release()
             except cx_Oracle.Error:
-                logger.info("Failed to release connection!")
+                logger.error("Failed to release connection!")
                 pass
 
             raise dbt.exceptions.DatabaseException(str(e).strip()) from e
 
         except Exception as e:
-            logger.info("Rolling back transaction.")
+            logger.error("Rolling back transaction.")
             self.release()
             if isinstance(e, dbt.exceptions.RuntimeException):
                 # during a sql query, an internal to dbt exception was raised.
@@ -178,7 +197,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             raise dbt.exceptions.RuntimeException(e) from e
 
     @classmethod
-    def get_credentials(cls, credentials):
+    def get_credentials(cls, credentials) -> OracleAdapterCredentials:
         return credentials
 
     def add_query(
@@ -187,7 +206,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
         auto_begin: bool = True,
         bindings: Optional[Any] = {},
         abridge_sql_log: bool = False,
-    ) -> Tuple[Connection, Any]:
+    ) -> Tuple[DBTConnection, Any]:
         connection = self.get_thread_connection()
         if auto_begin and connection.transaction_open is False:
             self.begin()
@@ -200,21 +219,32 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
             else:
                 log_sql = sql
 
-            logger.debug(
-                "On {connection_name}: {sql}",
-                connection_name=connection.name,
-                sql=log_sql,
-            )
+            if connection._credentials.debug_log_commands:
+
+                fire_event(
+                    HookInfo(
+                        "On {connection_name}: {sql}".format(
+                            connection_name=connection.name,
+                            sql=log_sql,
+                        )
+                    )
+                )
             pre = time.time()
 
             cursor = connection.handle.cursor()
+            if connection._credentials.cursor_precode:
+                cursor.execute(connection._credentials.cursor_precode)
             cursor.execute(sql, bindings)
             connection.handle.commit()
-            logger.debug(
-                "SQL status: {status} in {elapsed:0.2f} seconds",
-                status=self.get_status(cursor),
-                elapsed=(time.time() - pre),
-            )
+            if connection._credentials.debug_log_commands:
+                fire_event(
+                    HookInfo(
+                        "SQL status: {status} in {elapsed:0.2f} seconds".format(
+                            status=self.get_status(cursor),
+                            elapsed=(time.time() - pre),
+                        )
+                    ),
+                )
 
             return connection, cursor
 
