@@ -183,7 +183,7 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
                 logger.error("Failed to release connection!")
                 pass
 
-            raise dbt.exceptions.DatabaseException(str(e).strip()) from e
+            raise dbt.exceptions.DatabaseException(str(sql) + str(e).strip()) from e
 
         except Exception as e:
             logger.error("Rolling back transaction.")
@@ -233,6 +233,10 @@ class OracleAdapterConnectionManager(SQLConnectionManager):
 
             cursor = connection.handle.cursor()
             if connection._credentials.cursor_precode:
+                # print(f'ALTER SESSION SET SCHEMA "{connection._credentials.schema}"')
+                # cursor.execute(
+                #     f"ALTER SESSION SET CURRENT_SCHEMA = {connection._credentials.schema}"
+                # )
                 cursor.execute(connection._credentials.cursor_precode)
             cursor.execute(sql, bindings)
             connection.handle.commit()

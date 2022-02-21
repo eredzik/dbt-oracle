@@ -161,12 +161,12 @@
           numeric_precision as "numeric_precision",
           numeric_scale as "numeric_scale"
       from columns
-      where table_name = upper('{{ relation.identifier }}')
+      where upper(table_name) = upper('{{ relation.identifier }}')
         {% if relation.schema %}
-        and table_schema = upper('{{ relation.schema }}')
+        and upper(table_schema) = upper('{{ relation.schema }}')
         {% endif %}
         {% if relation.database %}
-        and table_catalog = upper('{{ relation.database }}')
+        and upper(table_catalog) = upper('{{ relation.database }}')
         {% endif %}
       order by ordinal_position
 
@@ -258,9 +258,23 @@
 {% endmacro %}
 
 {% macro oracle__rename_relation(from_relation, to_relation) -%}
+  
+  {% if from_relation.type == "view"%}
+    {{oracle__drop_relation(to_relation)}}
+    {% call statement('view_definition', fetch_result=True ) %}
+      SELECT text FROM all_views where upper(owner) = upper('{{from_relation.include(False, True, False)}}') and upper(view_name)=upper('{{from_relation.include(False, False, True)}}')
+    {% endcall %}
+    {%set definition_sql = load_result('view_definition')%}
+    {% call statement('rename_relation') -%}
+      {{ oracle__create_view_as(to_relation, definition_sql['data'][0][0]) }} 
+    {% endcall%}
+  {% else %}
   {% call statement('rename_relation') -%}
-    rename {{ from_relation.include(False, False, True).quote(schema=False, identifier=False) }} to {{ to_relation.include(False, False, True).quote(schema=False, identifier=False) }}
+
+      alter table {{ from_relation.include(False, True, True).quote(schema=False, identifier=False) }} rename to {{ to_relation.include(False, False, True).quote(schema=False, identifier=False) }}
+
   {%- endcall %}
+  {% endif %}
 {% endmacro %}
 
 {% macro oracle__information_schema_name(database) -%}
