@@ -165,9 +165,9 @@
         {% if relation.schema %}
         and upper(table_schema) = upper('{{ relation.schema }}')
         {% endif %}
-        {% if relation.database %}
+        {#% if relation.database %}
         and upper(table_catalog) = upper('{{ relation.database }}')
-        {% endif %}
+        {% endif %#}
       order by ordinal_position
 
   {% endcall %}
